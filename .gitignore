@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+
+# Run logs
+outputs/*.log
+
+# Checkpoints from experiment runs (large, regenerable).
+# The two reference checkpoints in outputs/checkpoints/ are kept.
+outputs/checkpoints/ablation/
+outputs/checkpoints/overfit_probe/

@@ -9,17 +9,37 @@ LABEL_MAP = {
     "violent": 1,
 }
 
+# ImageNet statistics — the pretrained ResNet-18 backbone was trained on inputs
+# normalized this way. Applied to train and eval identically (no serve skew).
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
 class ViolenceVideoDataset(Dataset):
-    def __init__(self, root_dir, seq_len=16):
+    def __init__(self, root_dir, seq_len=16, augment=False, normalize=False):
         self.root_dir = Path(root_dir)
         self.seq_len = seq_len
         self.video_paths = list(self.root_dir.rglob("*.mp4"))
 
-        self.transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-        ])
+        # `augment` turns on train-only spatial/color jitter to fight overfitting.
+        # It must never be enabled for val/test (that would make metrics
+        # non-deterministic and optimistic). `normalize` applies ImageNet stats.
+        self.transform = self._build_transform(augment=augment, normalize=normalize)
+
+    def _build_transform(self, augment, normalize):
+        steps = [transforms.ToPILImage()]
+        if augment:
+            steps += [
+                transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            ]
+        else:
+            steps += [transforms.Resize((224, 224))]
+        steps += [transforms.ToTensor()]
+        if normalize:
+            steps += [transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)]
+        return transforms.Compose(steps)
 
     def __len__(self):
         return len(self.video_paths)

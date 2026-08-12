@@ -1,4 +1,5 @@
 import sys
+from functools import lru_cache
 from pathlib import Path
 import cv2
 import torch
@@ -57,7 +58,9 @@ def sample_frames(video_path, seq_len=16):
 
     return torch.stack(frames)  # [T, C, H, W]
 
+@lru_cache(maxsize=1)
 def load_model():
+    # Cached so repeated predict_video() calls in one process load weights once.
     model = CNNLSTM().to(DEVICE)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.eval()
@@ -66,9 +69,9 @@ def load_model():
 def predict_video(video_path):
     model = load_model()
     frames = sample_frames(video_path, seq_len=SEQ_LEN)
-    frames = frames.unsqueeze(0).to(DEVICE)  # [1, T, C, H, W]
+    frames = frames.unsqueeze(0).to(DEVICE)  # [1, T, C, H, W] - T:: number of frames i.e 16
 
-    with torch.no_grad():
+    with torch.no_grad():  #Disables gradient tracking
         outputs = model(frames)
         probs = F.softmax(outputs, dim=1)
         pred_idx = probs.argmax(dim=1).item()
