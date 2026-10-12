@@ -155,6 +155,7 @@ global, so you do). Re-run Steps 2–3 after editing.
 
 ## Reproducibility check (optional, proves the seeding works)
 
-Run the ablation twice and confirm identical per-epoch metrics for a given seed —
-compare two `history_cnn_lstm_seed0.csv` files from separate runs; they should
-match line for line.
+Run the ablation twice and compare two `history_cnn_lstm_seed0.csv` files from
+separate runs. On CPU they match closely but **not line for line** (observed:
+epoch-1 val loss 0.4134 vs 0.4095), because some CPU kernels are not fully
+deterministic. That is why results are reported as mean ± std over seeds.

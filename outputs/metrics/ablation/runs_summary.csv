@@ -1,0 +1,7 @@
+run_name,seed,checkpoint_path,history_csv,best_epoch,best_val_loss,best_val_acc,num_params
+cnn_lstm,0,outputs/checkpoints/ablation\cnn_lstm_seed0.pth,outputs/metrics/ablation\history_cnn_lstm_seed0.csv,1,0.4094927253631445,0.8461538461538461,11965506
+cnn_lstm,1,outputs/checkpoints/ablation\cnn_lstm_seed1.pth,outputs/metrics/ablation\history_cnn_lstm_seed1.csv,2,0.39986371105680096,0.8076923076923077,11965506
+cnn_lstm,2,outputs/checkpoints/ablation\cnn_lstm_seed2.pth,outputs/metrics/ablation\history_cnn_lstm_seed2.csv,1,0.40578127509126294,0.8461538461538461,11965506
+frame_mean,0,outputs/checkpoints/ablation\frame_mean_seed0.pth,outputs/metrics/ablation\history_frame_mean_seed0.csv,5,0.2668850342375103,0.8461538461538461,11177538
+frame_mean,1,outputs/checkpoints/ablation\frame_mean_seed1.pth,outputs/metrics/ablation\history_frame_mean_seed1.csv,4,0.3601905813870522,0.8461538461538461,11177538
+frame_mean,2,outputs/checkpoints/ablation\frame_mean_seed2.pth,outputs/metrics/ablation\history_frame_mean_seed2.csv,3,0.43091321313897,0.8269230769230769,11177538

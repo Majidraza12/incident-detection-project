@@ -51,7 +51,7 @@ turning "a model that scores 89%" into "a project that can defend that 89%."
 
 | Change | File | Why it matters |
 |---|---|---|
-| **Reproducibility harness** | `train_utils.py` | `set_seed` covers Python/NumPy/torch RNGs + cuDNN determinism, and a seeded DataLoader generator makes shuffling repeatable. Same seed → identical per-epoch metrics. |
+| **Reproducibility harness** | `train_utils.py` | `set_seed` covers Python/NumPy/torch RNGs + cuDNN determinism, and a seeded DataLoader generator makes shuffling repeatable. Same-seed runs are close but not bit-identical on CPU (e.g. 0.4134 vs 0.4095 epoch-1 val loss), so results are reported as mean ± std over seeds. |
 | **Best-by-validation-loss checkpointing** | `train_utils.py:train_run` | Saves the checkpoint from the epoch with the lowest validation loss, not the last epoch. On this dataset that is a large difference (see below). |
 | **Frame-only baseline model** | `model.py:CNNMeanPool` | Same ResNet-18 backbone, but mean-pools the 16 frame features instead of using an LSTM. Isolates whether temporal modeling actually earns its keep. |
 | **Data augmentation + frozen-backbone option** | `dataset.py` | Train-only augmentation and ImageNet normalization; backbone can be frozen so only the LSTM and head train. |
@@ -76,19 +76,34 @@ epochs 2–10 never produced a checkpoint that was kept.
 **This is the single best thing to talk about in an interview.** It shows you
 read your own telemetry and changed the design because of it.
 
+### Temporal ablation — run, and the LSTM does not help
+
+`train_ablation.py` → `make_ablation_table.py`: CNN-LSTM vs. frame-only
+mean-pool, 2 models × 3 seeds, identical splits, seeds, and hyperparameters,
+best-by-val checkpoints, scored on the 53-clip test set.
+
+| Model | Params | Val acc | Test acc | Violent F1 |
+|---|---:|:-:|:-:|:-:|
+| CNN-LSTM | 11.97M | 0.833 ± 0.018 | 0.899 ± 0.032 | 0.924 ± 0.025 |
+| Frame mean-pool | 11.18M | 0.840 ± 0.009 | 0.906 ± 0.015 | 0.929 ± 0.012 |
+
+- The frame-only baseline **matches** the LSTM (90.6% vs 89.9%), inside
+  seed-to-seed noise, with ~7% fewer parameters and half the variance. Single-frame
+  appearance carries the signal on this dataset; temporal ordering adds little.
+- The CNN-LSTM's 3-seed mean (89.9%) confirms the original 89% was not a lucky run.
+- CNN-LSTM best epoch was 1–2 on every seed, confirming the 5-epoch cut. The
+  mean-pool model peaked at epochs 3–5, so it may be slightly undertrained — which
+  biases the comparison *toward* the LSTM, not against it.
+
+**Interview framing:** "I ran a controlled ablation to check whether the LSTM was
+earning its keep. It wasn't — a mean-pool baseline matched it with less variance —
+so for this data the simpler model is the better choice."
+
 ### Built but not yet run
 
-Two experiments are fully implemented and waiting on ~4 hours of CPU time:
-
-1. **Temporal ablation** (`train_ablation.py` → `make_ablation_table.py`) —
-   CNN-LSTM vs. frame-only mean-pool, 2 models × 3 seeds, identical splits,
-   seeds, and hyperparameters. Answers: *does the LSTM actually beat frame
-   averaging?*
-2. **Overfitting probe** (`train_overfit_probe.py`) — measures the train–val
-   accuracy gap of the current setup against an augmented + frozen-backbone
-   variant. Answers: *did the fix actually shrink the gap?*
-
-The README marks both as pending rather than showing empty cells.
+**Overfitting probe** (`train_overfit_probe.py`) — measures the train–val
+accuracy gap of the current setup against an augmented + frozen-backbone
+variant. Answers: *did the fix actually shrink the gap?* (~2 h on CPU.)
 
 ---
 
@@ -99,9 +114,10 @@ The README marks both as pending rather than showing empty cells.
   metric. Say so before an interviewer does.
 - **Small dataset (~350 clips) vs. a fine-tuned 12M-parameter model.** Hence the
   memorization described above.
-- **Possible split leakage.** `make_splits.py` splits at the *clip* level. Clips
-  from the same scene with sequential filenames could land in different splits,
-  which would inflate test scores. Known caveat, not solved.
+- **Cross-camera split leakage.** The ~350 clips are 175 events × 2 cameras.
+  `make_splits.py` splits at the *clip* level, so 30 of 34 violent and 11 of 17
+  non-violent test events have their other camera view in training. Test scores
+  are likely optimistic. Known caveat, not solved; fix is an event-level split.
 - **Binary and short-clip only.** No temporal localization (*when* in a long
   video), no multi-class incident types, no real-time streaming.
 - **Only the final LSTM timestep is used.** Attention or mean-pooling over all

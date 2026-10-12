@@ -37,22 +37,23 @@ epoch.
 
 Both arms share the same ResNet-18 backbone, splits, seeds, and hyperparameters.
 The **only** variable is how the 16 per-frame features are aggregated over time
-(LSTM vs. mean-pool). Generated table lives at
+(LSTM vs. mean-pool). Generated table:
 [`outputs/metrics/ablation/ablation_table.md`](outputs/metrics/ablation/ablation_table.md)
-after you run the ablation:
 
 | Model | Params | Val acc | Test acc | Violent F1 |
 |-------|-------:|:-------:|:--------:|:----------:|
-| CNN-LSTM (ResNet-18 + LSTM) | 11,965,506 | — | — | — |
-| Frame-only (ResNet-18 + mean-pool) | 11,177,538 | — | — | — |
+| CNN-LSTM (ResNet-18 + LSTM) | 11,965,506 | 0.833 ± 0.018 | 0.899 ± 0.032 | 0.924 ± 0.025 |
+| Frame-only (ResNet-18 + mean-pool) | 11,177,538 | 0.840 ± 0.009 | 0.906 ± 0.015 | 0.929 ± 0.012 |
 
-> **Status: harness built, benchmark not yet run.** Both architectures, the
-> shared training harness, and the table generator are implemented
-> (`train_ablation.py`, `make_ablation_table.py`); the 2 h CPU run that fills
-> this table is pending. Numbers will be reported as mean ± std over 3 seeds.
+_Mean ± std over 3 seeds (0, 1, 2); best-by-val checkpoints; 5 epochs; test set = 53 clips._
 
-If the frame-only baseline ties or beats the LSTM, that will be reported as-is —
-on a dataset this small that is a genuine and useful finding, not a failure.
+**Finding: the LSTM does not help on this dataset.** The frame-only baseline
+matches the CNN-LSTM (90.6% vs. 89.9% test accuracy, a gap well inside
+seed-to-seed noise) with ~7% fewer parameters and about half the variance across
+seeds. The discriminative signal is largely in single-frame appearance (poses,
+weapons, contact), so temporal ordering adds little at this data scale. The
+CNN-LSTM's 3-seed mean (89.9%) also confirms the original single-run 89% was not
+a lucky seed.
 
 ### Overfitting diagnostic
 
@@ -122,9 +123,11 @@ streamlit run src/app.py            # upload a clip, get a prediction
 python src/predict.py path/to.mp4   # CLI single-video inference
 ```
 
-Runs are reproducible: the same seed yields identical per-epoch metrics
-(`src/train_utils.py:set_seed`). On CPU the full ablation suite is slow (~0.8 s
-per clip/step); a GPU is strongly recommended.
+Runs are seeded (`src/train_utils.py:set_seed`: Python/NumPy/torch RNGs, cuDNN
+determinism, seeded DataLoader shuffling). Same-seed runs are close but **not
+bit-identical** on CPU — e.g. `cnn_lstm` seed 0 epoch-1 val loss was 0.4134 in
+one run and 0.4095 in another — so results are reported as mean ± std over
+seeds. The full ablation suite takes ~2 h on CPU; a GPU is strongly recommended.
 
 **Why 5 epochs?** In both prior 10-epoch runs the best validation loss occurred
 at **epoch 1** and never improved afterwards, while training loss fell to ~0.003
@@ -133,6 +136,10 @@ immediately. Since checkpoints are selected by best validation loss, epochs 2–
 contributed nothing that was kept. The budget is spent on **3 seeds** instead,
 because seed-to-seed noise on a 53-clip test set is comparable to the
 architecture difference being measured.
+
+In the ablation the CNN-LSTM's best epoch was 1–2 for every seed, confirming the
+cut. The mean-pool baseline overfits more slowly (best epochs 3, 4 and 5), so 5
+epochs may slightly undertrain it — which, if anything, favours the LSTM.
 
 ---
 
@@ -143,10 +150,13 @@ architecture difference being measured.
 - **Overfitting.** A full ResNet-18 fine-tuned on ~245 training clips memorizes
   the training set. Mitigated (not eliminated) by best-by-val selection and the
   augmentation/frozen-backbone probe.
-- **Possible split leakage.** `make_splits.py` splits at the **clip** level across
-  cameras with sequential filenames; adjacent clips from the same scene could land
-  in different splits and inflate test scores. The splits are kept fixed so the
-  ablation stays fair, but this is a known caveat, not a solved problem.
+- **Cross-camera split leakage.** The ~350 clips are 175 events, each filmed by
+  two cameras (`cam1`, `cam2`). `make_splits.py` splits at the **clip** level, so
+  the two views of one event can land in different splits: 30 of the 34 violent
+  and 11 of the 17 non-violent test events have their other camera view in the
+  training set. Test scores are therefore likely optimistic. The splits are kept
+  fixed so the ablation stays fair, but this is a known caveat, not a solved
+  problem; an event-level split is the fix.
 
 ---
 
